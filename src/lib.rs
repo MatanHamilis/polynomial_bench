@@ -6,7 +6,14 @@ use std::{
 };
 
 pub trait ScalarTrait:
-    Sized + Add<Output = Self> + AddAssign + Mul<Output = Self> + MulAssign + Copy
+    Sized
+    + Add<Output = Self>
+    + AddAssign
+    + Mul<Output = Self>
+    + for<'a> MulAssign<&'a Self>
+    + for<'a> Mul<&'a Self, Output = Self>
+    + MulAssign
+    + Copy
 {
     const ZERO: Self;
     const ONE: Self;
@@ -19,7 +26,7 @@ pub struct Polynomial<S: ScalarTrait> {
     coefficients: Vec<S>,
 }
 
-fn eval_naive<S: ScalarTrait>(x: S, coeff: impl Iterator<Item = S>) -> S {
+fn eval_naive<S: ScalarTrait>(x: &S, coeff: impl Iterator<Item = S>) -> S {
     let mut result = S::ZERO;
     let mut pow = S::ONE;
     for coeff in coeff {
@@ -30,7 +37,7 @@ fn eval_naive<S: ScalarTrait>(x: S, coeff: impl Iterator<Item = S>) -> S {
 }
 
 // pass reversed coefficients
-fn eval_horner<S: ScalarTrait>(x: S, coeff: impl Iterator<Item = S>) -> S {
+fn eval_horner<S: ScalarTrait>(x: &S, coeff: impl Iterator<Item = S>) -> S {
     let mut result = S::ZERO;
     for coeff in coeff {
         result = result * x + coeff;
@@ -39,16 +46,16 @@ fn eval_horner<S: ScalarTrait>(x: S, coeff: impl Iterator<Item = S>) -> S {
 }
 
 impl<S: ScalarTrait> Polynomial<S> {
-    pub fn eval(&self, x: S) -> S {
+    pub fn eval(&self, x: &S) -> S {
         eval_naive(x.into(), self.coefficients.iter().copied())
     }
-    pub fn eval_horner(&self, x: S) -> S {
-        eval_horner(x.into(), self.coefficients.iter().rev().copied())
+    pub fn eval_horner(&self, x: &S) -> S {
+        eval_horner(x, self.coefficients.iter().rev().copied())
     }
-    pub fn reverse_eval(&self, x: S) -> S {
+    pub fn reverse_eval(&self, x: &S) -> S {
         eval_naive(x, self.coefficients.iter().rev().copied())
     }
-    pub fn reverse_eval_horner(&self, x: S) -> S {
+    pub fn reverse_eval_horner(&self, x: &S) -> S {
         eval_horner(x, self.coefficients.iter().copied())
     }
     pub fn random(degree: usize) -> Self {
@@ -107,7 +114,7 @@ fn test_poly_eval() {
         let poly = Polynomial::<Wrapping<u64>>::random(degree as usize);
         for _ in 0..100 {
             let x = rng.random();
-            assert_eq!(poly.eval(x), poly.eval_horner(x));
+            assert_eq!(poly.eval(&x), poly.eval_horner(&x));
         }
     }
 }

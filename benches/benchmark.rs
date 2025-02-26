@@ -2,14 +2,15 @@ use benching_polynomials::{Polynomial, ScalarTrait};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::{iter::Sum, num::Wrapping};
 
-const DEGREE: usize = 10_000;
-const EVALS: usize = 64;
+const DEGREE: usize = 8;
+const EVALS: usize = 1;
 
 fn bench_for_type<S: ScalarTrait + Sum>(c: &mut Criterion, type_name: &str) {
     let polynomial = Polynomial::<S>::random(DEGREE);
     let reversed_polynomial = polynomial.clone().reverse();
     let mut rng = rand::rng();
     let evals = (0..EVALS).map(|_| S::rand(&mut rng)).collect::<Vec<_>>();
+    let e = S::rand(&mut rng);
 
     let mut group = c.benchmark_group(type_name);
 
@@ -18,27 +19,35 @@ fn bench_for_type<S: ScalarTrait + Sum>(c: &mut Criterion, type_name: &str) {
     // we then sum the result and "return" them which will also be passed to a `black_box` by criterion
     // this prevents dead-code elimination and ensures that the benchmark is actually measuring the
     // time it takes to compute the sum of the evaluations. (and the addition there is very negligible)
+    group.bench_function("regular single", |b| b.iter(|| polynomial.eval(&e)));
+    group.bench_function("horner single", |b| b.iter(|| polynomial.eval_horner(&e)));
+    group.bench_function("reversed regular single", |b| {
+        b.iter(|| polynomial.reverse_eval(&e))
+    });
+    group.bench_function("reversed horner single", |b| {
+        b.iter(|| polynomial.reverse_eval_horner(&e))
+    });
     group.bench_function("regular", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&polynomial, evals.iter().copied()));
+            let (poly, evals) = black_box((&polynomial, evals.iter()));
             evals.map(|e| poly.eval(e)).sum::<S>()
         })
     });
     group.bench_function("horner", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&polynomial, evals.iter().copied()));
+            let (poly, evals) = black_box((&polynomial, evals.iter()));
             evals.map(|e| poly.eval_horner(e)).sum::<S>()
         })
     });
     group.bench_function("reversed regular", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&reversed_polynomial, evals.iter().copied()));
+            let (poly, evals) = black_box((&reversed_polynomial, evals.iter()));
             evals.map(|e| poly.reverse_eval(e)).sum::<S>()
         })
     });
     group.bench_function("reversed horner", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&reversed_polynomial, evals.iter().copied()));
+            let (poly, evals) = black_box((&reversed_polynomial, evals.iter()));
             evals.map(|e| poly.reverse_eval_horner(e)).sum::<S>()
         })
     });
