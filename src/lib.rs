@@ -2,15 +2,18 @@ use k256::elliptic_curve::PrimeField;
 use rand::Rng;
 use std::{
     num::Wrapping,
-    ops::{Add, AddAssign, Mul, MulAssign},
+    ops::{AddAssign, MulAssign},
+    u128,
 };
 
 pub trait ScalarTrait:
-    Sized + Add<Output = Self> + AddAssign + Mul<Output = Self> + MulAssign + Copy
+    Sized + MulAssign + 'static + AddAssign + for<'a> AddAssign<&'a Self> + for<'a> MulAssign<&'a Self>
 {
     const ZERO: Self;
     const ONE: Self;
     fn rand(r: &mut impl rand::RngCore) -> Self;
+    fn add(&self, other: &Self) -> Self;
+    fn mul(&self, other: &Self) -> Self;
 }
 
 // Polynomial in Z_{2^64}.
@@ -19,37 +22,38 @@ pub struct Polynomial<S: ScalarTrait> {
     coefficients: Vec<S>,
 }
 
-fn eval_naive<S: ScalarTrait>(x: S, coeff: impl Iterator<Item = S>) -> S {
+fn eval_naive<'a, S: ScalarTrait>(x: &S, coeff: impl Iterator<Item = &'a S> + 'a) -> S {
     let mut result = S::ZERO;
     let mut pow = S::ONE;
     for coeff in coeff {
-        result += coeff * pow;
+        result += coeff.mul(&pow);
         pow *= x;
     }
     result
 }
 
 // pass reversed coefficients
-fn eval_horner<S: ScalarTrait>(x: S, coeff: impl Iterator<Item = S>) -> S {
+fn eval_horner<'a, S: ScalarTrait>(x: &S, coeff: impl Iterator<Item = &'a S> + 'a) -> S {
     let mut result = S::ZERO;
     for coeff in coeff {
-        result = result * x + coeff;
+        result *= x;
+        result += coeff;
     }
     result
 }
 
 impl<S: ScalarTrait> Polynomial<S> {
-    pub fn eval(&self, x: S) -> S {
-        eval_naive(x.into(), self.coefficients.iter().copied())
+    pub fn eval(&self, x: &S) -> S {
+        eval_naive(x, self.coefficients.iter())
     }
-    pub fn eval_horner(&self, x: S) -> S {
-        eval_horner(x.into(), self.coefficients.iter().rev().copied())
+    pub fn eval_horner(&self, x: &S) -> S {
+        eval_horner(x, self.coefficients.iter().rev())
     }
-    pub fn reverse_eval(&self, x: S) -> S {
-        eval_naive(x, self.coefficients.iter().rev().copied())
+    pub fn reverse_eval(&self, x: &S) -> S {
+        eval_naive(x, self.coefficients.iter().rev())
     }
-    pub fn reverse_eval_horner(&self, x: S) -> S {
-        eval_horner(x, self.coefficients.iter().copied())
+    pub fn reverse_eval_horner(&self, x: &S) -> S {
+        eval_horner(x, self.coefficients.iter())
     }
     pub fn random(degree: usize) -> Self {
         let mut coefficients = Vec::with_capacity(degree);
@@ -72,6 +76,12 @@ impl ScalarTrait for Wrapping<u64> {
     fn rand(r: &mut impl rand::RngCore) -> Self {
         r.random()
     }
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn mul(&self, other: &Self) -> Self {
+        self * other
+    }
 }
 
 impl ScalarTrait for Wrapping<u128> {
@@ -79,6 +89,12 @@ impl ScalarTrait for Wrapping<u128> {
     const ONE: Self = Wrapping(1);
     fn rand(r: &mut impl rand::RngCore) -> Self {
         r.random()
+    }
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn mul(&self, other: &Self) -> Self {
+        self * other
     }
 }
 
@@ -88,6 +104,12 @@ impl ScalarTrait for k256::Scalar {
     fn rand(r: &mut impl rand::RngCore) -> Self {
         Self::from_repr_vartime(r.random::<[u8; 32]>().into()).unwrap()
     }
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn mul(&self, other: &Self) -> Self {
+        self * other
+    }
 }
 
 impl ScalarTrait for curve25519_dalek::Scalar {
@@ -95,6 +117,12 @@ impl ScalarTrait for curve25519_dalek::Scalar {
     const ONE: Self = Self::ONE;
     fn rand(r: &mut impl rand::RngCore) -> Self {
         Self::from_bytes_mod_order_wide(&r.random::<[u8; 64]>())
+    }
+    fn add(&self, other: &Self) -> Self {
+        self + other
+    }
+    fn mul(&self, other: &Self) -> Self {
+        self * other
     }
 }
 
@@ -107,7 +135,7 @@ fn test_poly_eval() {
         let poly = Polynomial::<Wrapping<u64>>::random(degree as usize);
         for _ in 0..100 {
             let x = rng.random();
-            assert_eq!(poly.eval(x), poly.eval_horner(x));
+            assert_eq!(poly.eval(&x), poly.eval_horner(&x));
         }
     }
 }

@@ -5,7 +5,7 @@ use std::{iter::Sum, num::Wrapping};
 const DEGREE: usize = 10_000;
 const EVALS: usize = 64;
 
-fn bench_for_type<S: ScalarTrait + Sum>(c: &mut Criterion, type_name: &str) {
+fn bench_for_type<S: ScalarTrait + Sum + Clone>(c: &mut Criterion, type_name: &str) {
     let polynomial = Polynomial::<S>::random(DEGREE);
     let reversed_polynomial = polynomial.clone().reverse();
     let mut rng = rand::rng();
@@ -20,26 +20,26 @@ fn bench_for_type<S: ScalarTrait + Sum>(c: &mut Criterion, type_name: &str) {
     // time it takes to compute the sum of the evaluations. (and the addition there is very negligible)
     group.bench_function("regular", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&polynomial, evals.iter().copied()));
-            evals.map(|e| poly.eval(e)).sum::<S>()
+            let (poly, evals) = black_box((&polynomial, evals.as_slice()));
+            evals.iter().map(|e| poly.eval(e)).sum::<S>()
         })
     });
     group.bench_function("horner", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&polynomial, evals.iter().copied()));
-            evals.map(|e| poly.eval_horner(e)).sum::<S>()
+            let (poly, evals) = black_box((&polynomial, evals.as_slice()));
+            evals.iter().map(|e| poly.eval_horner(e)).sum::<S>()
         })
     });
     group.bench_function("reversed regular", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&reversed_polynomial, evals.iter().copied()));
-            evals.map(|e| poly.reverse_eval(e)).sum::<S>()
+            let (poly, evals) = black_box((&reversed_polynomial, evals.as_slice()));
+            evals.iter().map(|e| poly.reverse_eval(e)).sum::<S>()
         })
     });
     group.bench_function("reversed horner", |b| {
         b.iter(|| {
-            let (poly, evals) = black_box((&reversed_polynomial, evals.iter().copied()));
-            evals.map(|e| poly.reverse_eval_horner(e)).sum::<S>()
+            let (poly, evals) = black_box((&reversed_polynomial, evals.as_slice()));
+            evals.iter().map(|e| poly.reverse_eval_horner(e)).sum::<S>()
         })
     });
 
